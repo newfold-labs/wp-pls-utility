@@ -1,0 +1,28 @@
+{
+  "name": "newfold-labs/wp-pls-utility",
+  "description": "An utility to handle PLS license actions",
+  "license": "GPL-2.0-or-later",
+  "authors": [
+    {
+      "name": "YITH",
+      "email": "plugins@yithemes.com"
+    }
+  ],
+  "autoload": {
+    "psr-4": {
+      "NewfoldLabs\\WP\\PLS\\": "includes"
+    },
+    "files": [
+      "bootstrap.php"
+    ]
+  },
+  "repositories": {
+    "newfold": {
+      "type": "composer",
+      "url": "https://newfold-labs.github.io/satis/",
+      "only": [
+        "newfold-labs/*"
+      ]
+    }
+  }
+}
