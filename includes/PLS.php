@@ -15,47 +15,40 @@ final class PLS {
 	];
 
 	/**
-	 * The plugin slug
-	 *
-	 * @var string
-	 */
-	protected $plugin_slug = '';
-
-	/**
-	 * Class additional arguments
+	 * Class config array
 	 *
 	 * @var array
 	 */
-	protected $args = [];
+	protected static $config = [
+		'environment' => 'production',
+		'cache_ttl'   => 12 * HOUR_IN_SECONDS,
+		'timeout'     => 5,
+	];
 
 	/**
 	 * Class construct
 	 *
 	 * @since 1.0.0
-	 * @param string $plugin_slug The plugin slug.
-	 * @param array  $args        (Optional) An array of additional class arguments
+	 * @param array $args (Optional) An array of additional class arguments
 	 * @return void
 	 */
-	public function __construct( string $plugin_slug, array $args = [] ) {
-		$this->plugin_slug = $plugin_slug;
-		$this->args        = wp_parse_args(
-			$args,
-			[
-				'environment' => 'production',
-				'cache_ttl'	  => 12 * HOUR_IN_SECONDS,
-				'timeout'	  => 5
-			]
+	public static function config( array $config = [] ) {
+		self::$config = wp_parse_args(
+			$config,
+			self::$config
 		);
 	}
 
 	/**
-	 * Activate pls licence
+	 * Activate PLS licence
 	 *
 	 * @since 1.0.0
-	 * @param array $args (Optional) An array of arguments to send with the request.
+	 * @param string $plugin_slug The plugin slug to activate.
+	 * @param string $license_id  (Optional) The license ID to activate. If empty it reads the options for plugin slug if any.
+	 * @param array  $args        (Optional) An array of arguments to send with the request.
 	 * @return bool|\WP_Error
 	 */
-	public function activate( array $args = [] ): bool|\WP_Error {
+	public static function activate( string $plugin_slug, string $license_id = '', array $args = [] ): bool|\WP_Error {
 		$args = wp_parse_args(
 			$args,
 			[
@@ -64,13 +57,18 @@ final class PLS {
 			]
 		);
 
-		// Get stored license ID.
-		$license_id = $this->get_license_id();
-		if ( is_wp_error( $license_id ) ) {
-			return $license_id;
+		if ( empty( $license_id ) ) {
+			// Try to get the stored license ID if empty
+			$license_id = self::get_license_id( $plugin_slug );
+			if ( is_wp_error( $license_id ) ) {
+				return $license_id;
+			}
+		} else {
+			// Always store given license ID for future request.
+			self::store_license_id( $plugin_slug, $license_id );
 		}
 
-		$response = $this->call(
+		$response = self::call(
 			"license/{$license_id}/activate",
 			'POST',
 			$args
@@ -85,30 +83,31 @@ final class PLS {
 		}
 
 		// Store activation key
-		return $this->store_activation_key( $response['data']['activation_key'] );
+		return self::store_activation_key( $plugin_slug, $response['data']['activation_key'] );
 	}
 
 	/**
-	 * Deactivate pls licence
+	 * Deactivate PLS licence
 	 *
 	 * @since 1.0.0
+	 * @param string $plugin_slug The plugin slug to deactivate.
 	 * @return bool|\WP_Error
 	 */
-	public function deactivate(): bool|\WP_Error {
+	public static function deactivate( string $plugin_slug ): bool|\WP_Error {
 
 		// Get stored license ID.
-		$license_id = $this->get_license_id();
+		$license_id = self::get_license_id( $plugin_slug );
 		if ( is_wp_error( $license_id ) ) {
 			return $license_id;
 		}
 
 		// If no activation key found for this license no further actions are required.
-		$activation_key = $this->get_activation_key();
+		$activation_key = self::get_activation_key( $plugin_slug );
 		if ( empty( $activation_key ) ) {
 			return true;
 		}
 
-		$response = $this->call(
+		$response = self::call(
 			"license/{$license_id}/deactivate",
 			'POST',
 			[
@@ -120,41 +119,35 @@ final class PLS {
 			return $response;
 		}
 
-		return $this->delete_activation_key();
+		return self::delete_activation_key( $plugin_slug );
 	}
 
 	/**
-	 * Check pls licence activation status
+	 * Check PLS licence activation status
 	 *
 	 * @since 1.0.0
-	 * @param bool $force (Optional) True to force a remote check for license, false to use cached value if any. Default is false.
+	 * @param string $plugin_slug The plugin slug to check.
+	 * @param bool   $force       (Optional) True to force a remote check for license, false to use cached value if any. Default is false.
 	 * @return bool|\WP_Error
 	 */
-	public function check( bool $force = false ): bool|\WP_Error {
+	public static function check( string $plugin_slug, bool $force = false ): bool|\WP_Error {
 
 		// Get stored license ID.
-		$license_id = $this->get_license_id();
+		$license_id = self::get_license_id( $plugin_slug );
 		if ( is_wp_error( $license_id ) ) {
 			return $license_id;
 		}
 
 		// Get stored activation key
-		$activation_key = $this->get_activation_key();
+		$activation_key = self::get_activation_key( $plugin_slug );
 		if ( empty( $activation_key ) ) {
 			return false;
 		}
 
-		$response = get_transient( "pls_license_status_valid_{$this->plugin_slug}" );
+		$response = get_transient( "pls_license_status_valid_{$plugin_slug}" );
 		if ( $force || false === $response ) {
 
-			$response = $this->call(
-				"license/{$license_id}/status",
-				'GET',
-				[
-					'id' => urlencode( $activation_key ),
-				]
-			);
-
+			$response = self::call( "license/{$activation_key}/status" );
 			if ( is_wp_error( $response ) ) {
 				return $response;
 			}
@@ -164,7 +157,7 @@ final class PLS {
 			}
 
 			// Store request response
-			set_transient( "pls_license_status_valid_{$this->plugin_slug}", $response['data'], 12 * HOUR_IN_SECONDS );
+			set_transient( "pls_license_status_valid_{$plugin_slug}", $response['data'], 12 * HOUR_IN_SECONDS );
 		}
 
 		return ! ! $response['valid'];
@@ -175,8 +168,8 @@ final class PLS {
 	 *
 	 * @return string Base API url.
 	 */
-	protected function get_base_url(): string {
-		$env = array_key_exists( $this->args['environment'], self::SERVERS ) ? $this->args['environment'] : 'production';
+	protected static function get_base_url(): string {
+		$env = array_key_exists( self::$config['environment'], self::SERVERS ) ? self::$config['environment'] : 'production';
 		return self::SERVERS[ $env ];
 	}
 
@@ -186,9 +179,8 @@ final class PLS {
 	 * @param string $endpoint The endpoint.
 	 * @return string Url to the endpoint.
 	 */
-	protected function get_endpoint_url( string $endpoint ): string {
-		$base_url = $this->get_base_url();
-		return "$base_url/$endpoint";
+	protected static function get_endpoint_url( string $endpoint ): string {
+		return self::get_base_url() . "/$endpoint";
 	}
 
 	/**
@@ -201,10 +193,10 @@ final class PLS {
 	 *
 	 * @return array|\WP_Error Returns decoded body of the response on success, or a {@see \WP_Error} object on failure
 	 */
-	protected function call( string $endpoint, string $method = 'GET', array $payload = [], array $args = [] ): array|\WP_Error {
-		$url      = $this->get_endpoint_url( $endpoint );
+	protected static function call( string $endpoint, string $method = 'GET', array $payload = [], array $args = [] ): array|\WP_Error {
+		$url      = self::get_endpoint_url( $endpoint );
 		$defaults = [
-			'timeout'            => $this->args['timeout'] ?? 5,
+			'timeout'            => self::$config['timeout'] ?? 5,
 			'sslverify'          => true,
 			'reject_unsafe_urls' => true,
 			'blocking'           => true,
@@ -215,7 +207,7 @@ final class PLS {
 			$args,
 			[
 				'method' => $method,
-				'body'   => 'GET' !== $method ? wp_json_encode( $payload ) : $payload
+				'body'   => 'GET' !== $method ? wp_json_encode( $payload ) : $payload,
 			]
 		);
 
@@ -228,7 +220,7 @@ final class PLS {
 			return $response;
 		}
 
-		return $this->process_response( $response );
+		return self::process_response( $response );
 	}
 
 	/**
@@ -238,7 +230,7 @@ final class PLS {
 	 * @param array $response Response of the request.
 	 * @return array|\WP_Error Formatted array of response, or {@see \WP_Error} on failure.
 	 */
-	protected function process_response( array $response ): array|\WP_Error {
+	protected static function process_response( array $response ): array|\WP_Error {
 		$code = $response['response']['code'] ?? 200;
 		$body = $response['body'] ?? '';
 		$body = @ json_decode( $body, true );
@@ -259,55 +251,72 @@ final class PLS {
 	 * Get stored license ID
 	 *
 	 * @since 1.0.0
+	 * @param string $plugin_slug The plugin slug of the license.
 	 * @return string|\WP_Error
 	 */
-	protected function get_license_id(): string|\WP_Error {
-		$license_id = get_option( "pls_license_id_{$this->plugin_slug}", '' );
+	public static function get_license_id( $plugin_slug ): string|\WP_Error {
+		$license_id = get_option( "pls_license_id_$plugin_slug", '' );
 		if ( empty( $license_id ) ) {
-			return new \WP_Error( 'empty-license-id', sprintf( 'No license ID found for plugin slug %s', $this->plugin_slug ) );
+			return new \WP_Error( 'empty-license-id', sprintf( 'No license ID found for plugin slug %s', $plugin_slug ) );
 		}
 
 		return $license_id;
 	}
 
 	/**
-	 * Get activation key option name
+	 * Get stored license ID
 	 *
 	 * @since 1.0.0
-	 * @return string
+	 * @param string $plugin_slug The plugin slug of the license.
+	 * @return bool
 	 */
-	protected function get_activation_key_option(): string {
-		return "pls_activation_key_{$this->plugin_slug}";
+	public static function store_license_id( string $plugin_slug, string $license_id ): bool {
+		return update_option( "pls_license_id_$plugin_slug", $license_id, false );
+	}
+
+
+	/**
+	 * Get stored license ID
+	 *
+	 * @since 1.0.0
+	 * @param string $plugin_slug The plugin slug of the license.
+	 * @return bool
+	 */
+	public static function delete_license_id( string $plugin_slug ): bool {
+		return delete_option( "pls_license_id_$plugin_slug" );
 	}
 
 	/**
 	 * Get stored activation key.
 	 *
 	 * @since 1.0.0
+	 * @param string $plugin_slug The plugin slug.
 	 * @return string
 	 */
-	protected function get_activation_key(): string {
-		return get_option( $this->get_activation_key_option(), '' );
+	protected static function get_activation_key( string $plugin_slug ): string {
+		return get_option( "pls_activation_key_{$plugin_slug}", '' );
 	}
 
 	/**
 	 * Store given activation key in the database.
 	 *
 	 * @since 1.0.0
+	 * @param string $plugin_slug    The plugin slug.
 	 * @param string $activation_key The activation key to store.
 	 * @return bool
 	 */
-	protected function store_activation_key( string $activation_key ): bool {
-		return update_option( $this->get_activation_key_option(), $activation_key, false );
+	protected static function store_activation_key( string $plugin_slug, string $activation_key ): bool {
+		return update_option( "pls_activation_key_{$plugin_slug}", $activation_key, false );
 	}
 
 	/**
 	 * Delete stored activation key.
 	 *
 	 * @since 1.0.0
+	 * @param string $plugin_slug The plugin slug.
 	 * @return bool
 	 */
-	protected function delete_activation_key(): bool {
-		return delete_option( $this->get_activation_key_option() );
+	protected static function delete_activation_key( string $plugin_slug ): bool {
+		return delete_option( "pls_activation_key_{$plugin_slug}" );
 	}
 }

@@ -17,6 +17,12 @@ class Rest {
 		'activate'   => [
 			'methods' => \WP_REST_Server::EDITABLE,
 			'args'    => [
+				'license_id'  => [
+					'description'       => 'License ID to activate',
+					'type'              => 'string',
+					'sanitize_callback' => 'sanitize_text_field',
+					'validate_callback' => 'rest_validate_request_arg',
+				],
 				'domain_name' => [
 					'description'       => 'Domain of the site to active',
 					'type'              => 'string',
@@ -109,18 +115,11 @@ class Rest {
 	 *
 	 * @since 1.0.0
 	 * @param \WP_REST_Request $request The request.
-	 * @return PLS
 	 */
-	protected function get_pls( \WP_REST_Request $request ) {
-		$plugin_slug = $request->get_param( 'plugin_slug' );
-		$environment = $request->get_param( 'environment' );
-
-		return new PLS(
-			$plugin_slug,
-			[
-				'environment' => $environment,
-			]
-		);
+	protected function config_pls( \WP_REST_Request $request ) {
+		PLS::config( [
+			'environment' => $request->get_param( 'environment' ),
+		] );
 	}
 
 	/**
@@ -131,8 +130,11 @@ class Rest {
 	 * @return \WP_REST_Response
 	 */
 	public function activate( $request ) {
-		$pls      = $this->get_pls( $request );
-		$response = $pls->activate( $this->format_params( $request ) );
+		$this->config_pls( $request );
+
+		$plugin_slug = $request->get_param( 'plugin_slug' );
+		$license_id  = $request->get_param( 'license_id' ) ?? '';
+		$response    = PLS::activate( $plugin_slug, $license_id, $this->format_params( $request ) );
 
 		return rest_ensure_response( $response );
 	}
@@ -145,8 +147,10 @@ class Rest {
 	 * @return \WP_REST_Response
 	 */
 	public function deactivate( $request ) {
-		$pls      = $this->get_pls( $request );
-		$response = $pls->deactivate( $this->format_params( $request ) );
+		$this->config_pls( $request );
+
+		$plugin_slug = $request->get_param( 'plugin_slug' );
+		$response    = PLS::deactivate( $plugin_slug );
 
 		return rest_ensure_response( $response );
 	}
@@ -159,9 +163,11 @@ class Rest {
 	 * @return \WP_REST_Response
 	 */
 	public function check( $request ) {
-		$pls      = $this->get_pls( $request );
-		$force    = ! ! $request->get_param( 'force' );
-		$response = $pls->check( $force );
+		$this->config_pls( $request );
+
+		$plugin_slug = $request->get_param( 'plugin_slug' );
+		$force       = ! ! $request->get_param( 'force' );
+		$response    = PLS::check( $plugin_slug, $force );
 
 		return rest_ensure_response( $response );
 	}
