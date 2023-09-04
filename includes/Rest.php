@@ -14,7 +14,19 @@ class Rest {
 	 * Paths available under base path
 	 */
 	const ROUTES = [
-		'activate'   => [
+		'store-license' => [
+			'methods' => \WP_REST_Server::EDITABLE,
+			'args'    => [
+				'license_id' => [
+					'description'       => 'License ID to store',
+					'type'              => 'string',
+					'required'          => true,
+					'sanitize_callback' => 'sanitize_text_field',
+					'validate_callback' => 'rest_validate_request_arg',
+				],
+			],
+		],
+		'activate'      => [
 			'methods' => \WP_REST_Server::EDITABLE,
 			'args'    => [
 				'license_id'  => [
@@ -35,12 +47,12 @@ class Rest {
 					'sanitize_callback' => 'sanitize_email',
 					'validate_callback' => 'rest_validate_request_arg',
 				],
-			]
+			],
 		],
-		'deactivate' => [
+		'deactivate'    => [
 			'methods' => \WP_REST_Server::EDITABLE,
 		],
-		'check'      => [
+		'check'         => [
 			'methods' => \WP_REST_Server::READABLE,
 			'args'    => [
 				'force' => [
@@ -49,9 +61,16 @@ class Rest {
 					'sanitize_callback' => 'absint',
 					'validate_callback' => 'rest_validate_request_arg',
 				],
-			]
+			],
 		],
 	];
+
+	/**
+	 * Current request.
+	 *
+	 * @var \WP_REST_Request|null
+	 */
+	protected $request;
 
 	/**
 	 * Constructor method
@@ -91,7 +110,7 @@ class Rest {
 			array_merge_recursive(
 				self::ROUTES[ $route ],
 				[
-					'callback'            => [ $this, $route ],
+					'callback'            => [ $this, 'serve_request' ],
 					'permission_callback' => [ $this, 'permission_check' ],
 					'args'                => [
 						'environment' => [
@@ -111,14 +130,34 @@ class Rest {
 	}
 
 	/**
-	 * Get PLS class instance.
+	 * Serve a PLS request
 	 *
 	 * @since 1.0.0
 	 * @param \WP_REST_Request $request The request.
+	 * @return \WP_REST_Response|\WP_Error
 	 */
-	protected function config_pls( \WP_REST_Request $request ) {
+	public function serve_request( $request ): \WP_REST_Response|\WP_Error {
+		$action = str_replace( '-', '_', basename( $request->get_route() ) );
+		if ( ! $action || ! method_exists( $this, $action ) ) {
+			return new \WP_Error( 'invalid-rest-action', 'No action found to serve API request' );
+		}
+
+		$this->request = $request;
+		// Init PLS.
+		$this->config_pls();
+		// Now serve the request.
+		return $this->$action();
+	}
+
+	/**
+	 * Get PLS class instance.
+	 *
+	 * @since 1.0.0
+	 * @return void
+	 */
+	protected function config_pls() {
 		PLS::config( [
-			'environment' => $request->get_param( 'environment' ),
+			'environment' => $this->request->get_param( 'environment' ) ?? '',
 		] );
 	}
 
@@ -126,15 +165,26 @@ class Rest {
 	 * Activate license key.
 	 *
 	 * @since 1.0.0
-	 * @param \WP_REST_Request $request The request.
-	 * @return \WP_REST_Response
+	 * @return \WP_REST_Response|\WP_Error
 	 */
-	public function activate( $request ) {
-		$this->config_pls( $request );
+	protected function activate(): \WP_REST_Response|\WP_Error {
+		$plugin_slug = $this->request->get_param( 'plugin_slug' );
+		$license_id  = $this->request->get_param( 'license_id' ) ?? '';
+		$response    = PLS::activate( $plugin_slug, $license_id, $this->get_formatted_params() );
 
-		$plugin_slug = $request->get_param( 'plugin_slug' );
-		$license_id  = $request->get_param( 'license_id' ) ?? '';
-		$response    = PLS::activate( $plugin_slug, $license_id, $this->format_params( $request ) );
+		return rest_ensure_response( $response );
+	}
+
+	/**
+	 * Store a license key.
+	 *
+	 * @since 1.0.0
+	 * @return \WP_REST_Response|\WP_Error
+	 */
+	protected function store_license(): \WP_REST_Response|\WP_Error {
+		$plugin_slug = $this->request->get_param( 'plugin_slug' );
+		$license_id  = $this->request->get_param( 'license_id' );
+		$response    = PLS::store_license_id( $plugin_slug, $license_id );
 
 		return rest_ensure_response( $response );
 	}
@@ -143,13 +193,10 @@ class Rest {
 	 * Deactivate license key.
 	 *
 	 * @since 1.0.0
-	 * @param \WP_REST_Request $request The request.
-	 * @return \WP_REST_Response
+	 * @return \WP_REST_Response|\WP_Error
 	 */
-	public function deactivate( $request ) {
-		$this->config_pls( $request );
-
-		$plugin_slug = $request->get_param( 'plugin_slug' );
+	protected function deactivate(): \WP_REST_Response|\WP_Error {
+		$plugin_slug = $this->request->get_param( 'plugin_slug' );
 		$response    = PLS::deactivate( $plugin_slug );
 
 		return rest_ensure_response( $response );
@@ -159,14 +206,11 @@ class Rest {
 	 * Check if a license jey
 	 *
 	 * @since 1.0.0
-	 * @param \WP_REST_Request $request The request.
-	 * @return \WP_REST_Response
+	 * @return \WP_REST_Response|\WP_Error
 	 */
-	public function check( $request ) {
-		$this->config_pls( $request );
-
-		$plugin_slug = $request->get_param( 'plugin_slug' );
-		$force       = ! ! $request->get_param( 'force' );
+	protected function check(): \WP_REST_Response|\WP_Error {
+		$plugin_slug = $this->request->get_param( 'plugin_slug' );
+		$force       = ! ! $this->request->get_param( 'force' );
 		$response    = PLS::check( $plugin_slug, $force );
 
 		return rest_ensure_response( $response );
@@ -177,7 +221,7 @@ class Rest {
 	 *
 	 * @since 1.0.0
 	 * @param mixed $value The current filter value
-	 * @return boolean
+	 * @return bool|null
 	 */
 	public function check_authentication( $value ): bool|null {
 		return $this->permission_check() ? true : $value;
@@ -209,16 +253,15 @@ class Rest {
 	 * Format request params.
 	 *
 	 * @since 1.0.0
-	 * @param \WP_REST_Request $request The request.
 	 * @return array
 	 */
-	protected function format_params( \WP_REST_Request $request ): array {
-		$handler   = $this->get_handler( $request );
+	protected function get_formatted_params(): array {
+		$handler   = $this->get_handler( $this->request );
 		$schema    = self::ROUTES[ $handler ]['args'] ?? [];
 		$formatted = [];
 
 		foreach ( array_keys( $schema ) as $field_key ) {
-			$formatted[ $field_key ] = $request->get_param( $field_key );
+			$formatted[ $field_key ] = $this->request->get_param( $field_key );
 		}
 
 		return array_filter( $formatted );
