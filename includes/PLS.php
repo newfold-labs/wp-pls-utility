@@ -146,7 +146,6 @@ final class PLS {
 
 		$response = get_transient( "pls_license_status_valid_{$plugin_slug}" );
 		if ( $force || false === $response ) {
-
 			$response = self::call( "license/{$activation_key}/status" );
 			if ( is_wp_error( $response ) ) {
 				return $response;
@@ -255,7 +254,7 @@ final class PLS {
 	 * @return string|\WP_Error
 	 */
 	public static function get_license_id( $plugin_slug ): string|\WP_Error {
-		$license_id = get_option( "pls_license_id_$plugin_slug", '' );
+		$license_id = get_option( self::get_license_id_option_name( $plugin_slug ), '' );
 		if ( empty( $license_id ) ) {
 			return new \WP_Error( 'empty-license-id', sprintf( 'No license ID found for plugin slug %s', $plugin_slug ) );
 		}
@@ -271,7 +270,8 @@ final class PLS {
 	 * @return bool
 	 */
 	public static function store_license_id( string $plugin_slug, string $license_id ): bool {
-		return update_option( "pls_license_id_$plugin_slug", $license_id, false );
+		update_option( self::get_license_id_option_name( $plugin_slug ), $license_id, false );
+		return true;
 	}
 
 
@@ -283,7 +283,31 @@ final class PLS {
 	 * @return bool
 	 */
 	public static function delete_license_id( string $plugin_slug ): bool {
-		return delete_option( "pls_license_id_$plugin_slug" );
+		return delete_option( self::get_license_id_option_name( $plugin_slug ) );
+	}
+
+	/**
+	 * Get option name for license ID
+	 *
+	 * @since 1.0.0
+	 * @param string $plugin_slug The plugin slug of the license.
+	 * @return string
+	 */
+	protected static function get_license_id_option_name( string $plugin_slug ): string {
+		$environment = self::$config['environment'];
+		return "pls_license_id_{$environment}_{$plugin_slug}";
+	}
+
+	/**
+	 * Get option name for activation key
+	 *
+	 * @since 1.0.0
+	 * @param string $plugin_slug The plugin slug of the license.
+	 * @return string
+	 */
+	protected static function get_activation_key_option_name( string $plugin_slug ): string {
+		$environment = self::$config['environment'];
+		return "pls_activation_key_{$environment}_{$plugin_slug}";
 	}
 
 	/**
@@ -294,7 +318,7 @@ final class PLS {
 	 * @return string
 	 */
 	protected static function get_activation_key( string $plugin_slug ): string {
-		return get_option( "pls_activation_key_{$plugin_slug}", '' );
+		return get_option( self::get_activation_key_option_name( $plugin_slug ), '' );
 	}
 
 	/**
@@ -306,7 +330,7 @@ final class PLS {
 	 * @return bool
 	 */
 	protected static function store_activation_key( string $plugin_slug, string $activation_key ): bool {
-		return update_option( "pls_activation_key_{$plugin_slug}", $activation_key, false );
+		return update_option( self::get_activation_key_option_name( $plugin_slug ), $activation_key, false );
 	}
 
 	/**
@@ -317,6 +341,6 @@ final class PLS {
 	 * @return bool
 	 */
 	protected static function delete_activation_key( string $plugin_slug ): bool {
-		return delete_option( "pls_activation_key_{$plugin_slug}" );
+		return delete_option( self::get_activation_key_option_name( $plugin_slug ) );
 	}
 }
