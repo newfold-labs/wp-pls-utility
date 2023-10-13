@@ -1,0 +1,215 @@
+openapi: 3.0.3
+info:
+  title: PLS - Client library
+  description: |-
+    This library can be used by any third party code in order to save, activate, check and deactivate a license key against PLS server.
+    
+    Only users logged in as WordPress administrators are allowed to call endpoints in this API: all other users will get a 401 error status.
+    
+    License ids are stored inside WordPress options, named as follows: `pls_license_id_{environment}_{pluginSlug}`
+    
+    Activation keys are stored inside WordPress options, named as follows: `pls_activation_key_{environment}_{pluginSlug}`
+    
+    Some useful links:
+    - [Github repo](https://github.com/newfold-labs/wp-pls-utility)
+    - [PLS server doc](https://confluence.newfold.com/pages/viewpage.action?spaceKey=PLS&title=PLS+Version+0.4.X#/)
+  contact:
+    email: support@yithemes.com
+  license:
+    name: GPL
+    url: https://www.gnu.org/licenses/gpl-3.0.html
+  version: 3.0.0
+servers:
+  - url: https://your-wp-site.com/wp-json/psl/
+tags:
+  - name: Registration
+    description: Offer endpoints to register licenses key for plugins
+  - name: Handling
+    description: Offer endpoints to activate, deactivate and check status of registered licenses
+paths:
+  /{pluginSlug}/store-license:
+    post:
+      tags:
+        - Registration
+      summary: Register license for a specific plugin
+      description: Register a license key for the plugin specified in the path; license will be saved locally in a DB option.
+      operationId: storeLicense
+      parameters:
+        - name: pluginSlug
+          in: path
+          description: plugin slug
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: Register license
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/License'
+        required: true
+      responses:
+        '200':
+          description: Successful operation
+        '401':
+          description: Unauthorized
+  /{pluginSlug}/activate:
+    post:
+      tags:
+        - Handling
+      summary: Activate license for a specific plugin
+      description: Activate license key for plugin specified in the path. If request body is passed, system will use license key, domain name and email from the input. Otherwise system will try to use license registered for the plugin (if any), domain of the site and administrator email as defaults. If you pass a license key, it will be registered as well in DB options.
+      operationId: activateLicense
+      parameters:
+        - name: pluginSlug
+          in: path
+          description: plugin slug
+          required: true
+          schema:
+            type: string
+        - name: environment
+          in: query
+          description: Environment to use for PLS requests
+          required: false
+          schema:
+            type: string
+            enum: [ 'production', 'staging' ]
+      requestBody:
+        description: Activate license key
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Activation'
+        required: false
+      responses:
+        '200':
+          description: Successful operation
+        '400':
+          description: An error occurred with request on PLS server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PLSError'
+        '401':
+          description: Unauthorized
+  /{pluginSlug}/deactivate:
+    post:
+      tags:
+        - Handling
+      summary: Deactivate license for a specific plugin.
+      description: Deactivate license key for plugin specified in the path.
+      operationId: deactivateLicense
+      parameters:
+        - name: pluginSlug
+          in: path
+          description: plugin slug
+          required: true
+          schema:
+            type: string
+        - name: environment
+          in: query
+          description: Environment to use for PLS requests
+          required: false
+          schema:
+            type: string
+            enum: [ 'production', 'staging' ]
+      responses:
+        '200':
+          description: Successful operation
+        '400':
+          description: An error occurred with request on PLS server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PLSError'
+        '500':
+          description: Internal server error on PLS server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PLSError'
+        '401':
+          description: Unauthorized
+  /{pluginSlug}/check:
+    get:
+      tags:
+        - Handling
+      summary: Check status of license for a specific plugin
+      description: Checks and returns status of the activation of license key for specified plugin against PLS server. If force parameter isn't sent in the body, system will assume value from cache (if already set).
+      operationId: checkLicense
+      parameters:
+        - name: pluginSlug
+          in: path
+          description: plugin slug
+          required: true
+          schema:
+            type: string
+        - name: force
+          in: query
+          description: Whether to force cache update
+          required: false
+          schema:
+            type: boolean
+        - name: environment
+          in: query
+          description: Environment to use for PLS requests
+          required: false
+          schema:
+            type: string
+            enum: [ 'production', 'staging' ]
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: boolean
+        '404':
+          description: License not found on PLS Server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PLSError'
+        '500':
+          description: Internal server error on PLS server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PLSError'
+        '401':
+          description: Unauthorized
+components:
+  schemas:
+    License:
+      type: object
+      properties:
+        license_id:
+          type: string
+          example: efc1c3f0-2dcc-461a-9b6a-886dad6cab36
+    Activation:
+      type: object
+      properties:
+        license_id:
+          type: string
+          example: efc1c3f0-2dcc-461a-9b6a-886dad6cab36
+        domain_name:
+          type: string
+          example: testsite.com
+        email:
+          type: string
+          example: admin@email.com
+    PLSError:
+      type: object
+      properties:
+        code:
+          type: string
+          description: |
+            Code of the response. Fixed and unique code for all responses successful or not.
+        message:
+          type: string
+          description: |
+            Provides generic information about the action called.
+        data:
+          type: object
+          description: |
+            Additional data returned by the action called. The data and type may vary depending on the endpoint but always as json.
