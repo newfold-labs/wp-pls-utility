@@ -155,8 +155,9 @@ final class PLS {
 				return new \WP_Error( 'malformed-response', 'Malformed PLS API response' );
 			}
 
+			$response = $response['data'];
 			// Store request response
-			set_transient( "pls_license_status_valid_{$plugin_slug}", $response['data'], 12 * HOUR_IN_SECONDS );
+			set_transient( "pls_license_status_valid_{$plugin_slug}", $response, 12 * HOUR_IN_SECONDS );
 		}
 
 		return ! ! $response['valid'];
@@ -317,7 +318,7 @@ final class PLS {
 	 * @param string $plugin_slug The plugin slug.
 	 * @return string
 	 */
-	protected static function get_activation_key( string $plugin_slug ): string {
+	public static function get_activation_key( string $plugin_slug ): string {
 		return get_option( self::get_activation_key_option_name( $plugin_slug ), '' );
 	}
 
