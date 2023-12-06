@@ -29,6 +29,7 @@ It accepts an array of parameters like:
  - environment: the environment to use for the PLS server. `production` and `staging` are the accepted value (use one). Default value is `production`;
  - cache_ttl: the expiration time for the library cache system used by the `check` method. Default value is 12 hours;
  - timeout: the timeout for the HTTP request. Default value is 5 seconds.
+ - network: set `true` to store license info as network options, `false` to use default options
 
 Below is an example of how to use the config method:
 
@@ -38,6 +39,7 @@ PLS::config(
         'environment' => 'staging',
         'cache_ttl' => 12 * HOUR_IN_SECONDS,
         'timeout' => 5,
+        'network' => false
     )
 );
 ```
