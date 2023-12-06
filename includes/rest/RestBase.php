@@ -225,4 +225,22 @@ abstract class RestBase {
 
 		return array_filter( $formatted );
 	}
+
+	/**
+	 * Send REST response
+	 *
+	 * @since 1.0.0
+	 * @param mixed $response The REST response.
+	 * @return \WP_REST_Response|\WP_Error
+	 */
+	protected function send_response( $response ) {
+		if ( is_wp_error( $response ) ) {
+			$error_data = $response->get_error_data();
+			if ( empty( $error_data['status'] ) && 'empty-license-id' === $response->get_error_code() ) {
+				$response->add_data( array( 'status' => 400 ) );
+			}
+		}
+
+		return rest_ensure_response( $response );
+	}
 }

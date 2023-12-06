@@ -66,7 +66,7 @@ class Rest extends RestBase {
 				'force' => array(
 					'description'       => 'Whether to ignore cache and execute a new check against the server',
 					'type'              => 'boolean',
-					'sanitize_callback' => 'absint',
+					'sanitize_callback' => 'rest_sanitize_boolean',
 					'validate_callback' => 'rest_validate_request_arg',
 				),
 			),
@@ -84,7 +84,7 @@ class Rest extends RestBase {
 		$license_id  = $this->request->get_param( 'license_id' ) ?? '';
 		$response    = PLS::activate( $plugin_slug, $license_id, $this->get_formatted_params() );
 
-		return rest_ensure_response( $response );
+		return $this->send_response( $response );
 	}
 
 	/**
@@ -98,7 +98,7 @@ class Rest extends RestBase {
 		$license_id  = $this->request->get_param( 'license_id' );
 		$response    = PLS::store_license_id( $plugin_slug, $license_id );
 
-		return rest_ensure_response( $response );
+		return $this->send_response( $response );
 	}
 
 	/**
@@ -111,7 +111,7 @@ class Rest extends RestBase {
 		$plugin_slug = $this->request->get_param( 'plugin_slug' );
 		$response    = PLS::deactivate( $plugin_slug );
 
-		return rest_ensure_response( $response );
+		return $this->send_response( $response );
 	}
 
 	/**
@@ -125,6 +125,6 @@ class Rest extends RestBase {
 		$force       = ! ! $this->request->get_param( 'force' );
 		$response    = PLS::check( $plugin_slug, $force );
 
-		return rest_ensure_response( $response );
+		return $this->send_response( $response );
 	}
 }

@@ -8,8 +8,8 @@ info:
     
     License ids are stored inside WordPress options, named as follows: `pls_license_id_{environment}_{pluginSlug}`
     
-    Activation keys are stored inside WordPress options, named as follows: `pls_activation_key_{environment}_{pluginSlug}`
-    
+    Activation keys are stored inside WordPress options, named as follows: `pls_activation_key_{environment}_{licenseID}`
+  
     Some useful links:
     - [Github repo](https://github.com/newfold-labs/wp-pls-utility)
     - [PLS server doc](https://confluence.newfold.com/pages/viewpage.action?spaceKey=PLS&title=PLS+Version+0.4.X#/)
@@ -20,7 +20,7 @@ info:
     url: https://www.gnu.org/licenses/gpl-3.0.html
   version: 3.0.0
 servers:
-  - url: https://your-wp-site.com/wp-json/psl/
+  - url: https://your-wp-site.com/wp-json/psl/v1/
 tags:
   - name: Registration
     description: Offer endpoints to register licenses key for plugins
@@ -41,6 +41,19 @@ paths:
           required: true
           schema:
             type: string
+        - name: environment
+          in: query
+          description: Environment to use for PLS requests
+          required: false
+          schema:
+            type: string
+            enum: [ 'production', 'staging' ]
+        - name: network
+          in: query
+          description: Whether data should be saved inside network or regular options
+          required: false
+          schema:
+            type: boolean
       requestBody:
         description: Register license
         content:
@@ -51,8 +64,22 @@ paths:
       responses:
         '200':
           description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: boolean
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PLSError'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PLSError'
   /{pluginSlug}/activate:
     post:
       tags:
@@ -74,6 +101,12 @@ paths:
           schema:
             type: string
             enum: [ 'production', 'staging' ]
+        - name: network
+          in: query
+          description: Whether data should be saved inside network or regular options
+          required: false
+          schema:
+            type: boolean
       requestBody:
         description: Activate license key
         content:
@@ -84,14 +117,28 @@ paths:
       responses:
         '200':
           description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: boolean
         '400':
-          description: An error occurred with request on PLS server
+          description: Bad request
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/PLSError'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PLSError'
+        '500':
+          description: Internal server error on PLS server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PLSError'
   /{pluginSlug}/deactivate:
     post:
       tags:
@@ -113,11 +160,27 @@ paths:
           schema:
             type: string
             enum: [ 'production', 'staging' ]
+        - name: network
+          in: query
+          description: Whether data should be saved inside network or regular options
+          required: false
+          schema:
+            type: boolean
       responses:
         '200':
           description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: boolean
         '400':
-          description: An error occurred with request on PLS server
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PLSError'
+        '401':
+          description: Unauthorized
           content:
             application/json:
               schema:
@@ -128,8 +191,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PLSError'
-        '401':
-          description: Unauthorized
   /{pluginSlug}/check:
     get:
       tags:
@@ -157,6 +218,12 @@ paths:
           schema:
             type: string
             enum: [ 'production', 'staging' ]
+        - name: network
+          in: query
+          description: Whether data should be saved inside network or regular options
+          required: false
+          schema:
+            type: boolean
       responses:
         '200':
           description: successful operation
@@ -164,6 +231,18 @@ paths:
             application/json:
               schema:
                 type: boolean
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PLSError'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PLSError'
         '404':
           description: License not found on PLS Server
           content:
@@ -176,8 +255,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PLSError'
-        '401':
-          description: Unauthorized
 components:
   schemas:
     License:
